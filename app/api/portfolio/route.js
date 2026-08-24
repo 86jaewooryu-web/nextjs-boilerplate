@@ -1,63 +1,53 @@
+import { Client } from '@notionhq/client';
 import { NextResponse } from 'next/server';
 
+const notion = new Client({ auth: process.env.NOTION_API_KEY });
+
 export async function GET() {
-  const NOTION_TOKEN = process.env.NOTION_TOKEN;
-  const DATABASE_ID = process.env.NOTION_DATABASE_ID;
-
   try {
-    // 만약 ID에 전체 주소가 들어왔더라도 순수 32글자 ID만 자동으로 추출하는 안전장치
-    const cleanDatabaseId = DATABASE_ID && DATABASE_ID.includes('/') 
-      ? DATABASE_ID.split('/').pop().split('?')[0].slice(-32) 
-      : (DATABASE_ID || '').trim();
-
-    const notionRes = await fetch(`https://api.notion.com/v1/databases/${cleanDatabaseId}/query`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${NOTION_TOKEN}`,
-        'Notion-Version': '2022-06-28',
-        'Content-Type': 'application/json',
-      },
+    const response = await notion.databases.query({
+      database_id: process.env.NOTION_DATABASE_ID,
+      // Order 숫자를 기준으로 오름차순(ascending) 정렬 추가
+      sorts: [
+        {
+          property: 'Order',
+          direction: 'ascending',
+        },
+      ],
     });
 
-    if (!notionRes.ok) {
-      const errorText = await notionRes.text();
-      return NextResponse.json({ error: 'Failed to fetch from Notion', details: errorText, status: notionRes.status }, { status: 500 });
-    }
-
-    const data = await notionRes.json();
-
-    if (!data.results || !Array.isArray(data.results)) {
-      return NextResponse.json([], { headers: { 'Access-Control-Allow-Origin': '*' } });
-    }
-
-    const portfolios = data.results.map(page => {
-      const props = page.properties || {};
+    const data = response.results.map((page) => {
+      // 타이틀 추출
+      const title = page.properties.title?.title[0]?.plain_text || 'Untitled';
       
-      let title = 'Untitled';
+      // 이미지 URL 추출 (기존 imageUrl 또는 URL 속성)
       let imageUrl = '';
-
-      for (const key of Object.keys(props)) {
-        const prop = props[key];
-        if (prop.type === 'title' && prop.title?.[0]) {
-          title = prop.title[0].plain_text;
-        }
-        if (prop.type === 'files' && prop.files?.[0]) {
-          imageUrl = prop.files[0].file?.url || prop.files[0].external?.url || '';
-        }
+      const urlProp = page.properties.URL?.url || page.properties.URL?.rich_text?.[0]?.plain_text;
+      if (urlProp) {
+        imageUrl = urlProp;
+      } else if (page.properties.imageUrl?.files?.[0]) {
+        const fileObj = page.properties.imageUrl.files[0];
+        imageUrl = fileObj.file?.url || fileObj.external?.url;
       }
 
-      if (title === 'Untitled' && Object.keys(props).length > 0) {
-        const firstProp = props[Object.keys(props)[0]];
-        if (firstProp?.rich_text?.[0]) {
-          title = firstProp.rich_text[0].plain_text;
-        }
+      // 서브 이미지 추출 (subImages 속성)
+      let subImages = '';
+      const subProp = page.properties.SubImages?.rich_text?.[0]?.plain_text || page.properties.subImages?.url;
+      if (subProp) {
+        subImages = subProp;
       }
 
-      return { title, imageUrl };
+      return {
+        id: page.id,
+        title,
+        imageUrl,
+        subImages,
+      };
     });
 
-    return NextResponse.json(portfolios, { headers: { 'Access-Control-Allow-Origin': '*' } });
+    return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error(error);
+    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
   }
 }
