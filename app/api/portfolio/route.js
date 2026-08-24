@@ -16,12 +16,23 @@ export async function GET() {
 
     const data = await response.json();
 
+    // 데이터가 없거나 결과가 없으면 빈 배열 반환
+    if (!data.results || !Array.isArray(data.results)) {
+      return NextResponse.json([]);
+    }
+
+    // 각 페이지의 첫 번째 속성값을 무조건 타이틀로 가져오기 (에러 방지)
     const portfolios = data.results.map(page => {
-      const title = page.properties.Title?.title[0]?.plain_text || 'Untitled';
-      const imageFile = page.properties.Image?.files[0];
-      const imageUrl = imageFile?.file?.url || imageFile?.external?.url || '';
+      const props = page.properties || {};
+      const firstPropKey = Object.keys(props)[0];
+      const titleProp = firstPropKey ? props[firstPropKey] : null;
       
-      return { title, imageUrl };
+      let title = 'Untitled';
+      if (titleProp && titleProp.title && titleProp.title[0]) {
+        title = titleProp.title[0].plain_text;
+      }
+
+      return { title, imageUrl: '' };
     });
 
     return NextResponse.json(portfolios);
