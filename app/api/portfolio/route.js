@@ -5,8 +5,7 @@ export async function GET() {
   const DATABASE_ID = process.env.NOTION_DATABASE_ID;
 
   try {
-    const response = `https://api.notion.com/v1/databases/${DATABASE_ID}/query`;
-    const notionRes = await fetch(response, {
+    const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${NOTION_TOKEN}`,
@@ -15,7 +14,7 @@ export async function GET() {
       },
     });
 
-    const data = await notionRes.json();
+    const data = await response.json();
 
     if (!data.results || !Array.isArray(data.results)) {
       return NextResponse.json([], { headers: { 'Access-Control-Allow-Origin': '*' } });
@@ -23,8 +22,6 @@ export async function GET() {
 
     const portfolios = data.results.map(page => {
       const props = page.properties || {};
-      
-      // 어떤 이름의 열이든 첫 번째와 두 번째 속성값을 무조건 타이틀과 이미지로 가져오기
       let title = 'Untitled';
       let imageUrl = '';
 
@@ -35,14 +32,6 @@ export async function GET() {
         }
         if (prop.type === 'files' && prop.files && prop.files[0]) {
           imageUrl = prop.files[0].file?.url || prop.files[0].external?.url || '';
-        }
-      }
-
-      // 만약 타이틀을 못 찾았으면 첫 번째 텍스트 값이라도 가져오기
-      if (title === 'Untitled' && Object.keys(props).length > 0) {
-        const firstProp = props[Object.keys(props)[0]];
-        if (firstProp?.rich_text?.[0]) {
-          title = firstProp.rich_text[0].plain_text;
         }
       }
 
