@@ -16,12 +16,12 @@ export async function GET() {
 
     const data = await response.json();
 
-    // 데이터가 없거나 결과가 없으면 빈 배열 반환
     if (!data.results || !Array.isArray(data.results)) {
-      return NextResponse.json([]);
+      return NextResponse.json([], {
+        headers: { 'Access-Control-Allow-Origin': '*' }
+      });
     }
 
-    // 각 페이지의 첫 번째 속성값을 무조건 타이틀로 가져오기 (에러 방지)
     const portfolios = data.results.map(page => {
       const props = page.properties || {};
       const firstPropKey = Object.keys(props)[0];
@@ -35,8 +35,14 @@ export async function GET() {
       return { title, imageUrl: '' };
     });
 
-    return NextResponse.json(portfolios);
+    // CORS 허용 헤더를 포함하여 응답 반환
+    return NextResponse.json(portfolios, {
+      headers: { 'Access-Control-Allow-Origin': '*' }
+    });
   } catch (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { 
+      status: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' }
+    });
   }
 }
