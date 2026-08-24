@@ -46,7 +46,7 @@ export async function GET() {
           },
         ],
       }),
-      cache: 'no-store' 
+      next: { revalidate: 3600 } 
     });
 
     if (!res.ok) {
