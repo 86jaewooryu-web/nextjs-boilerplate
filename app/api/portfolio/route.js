@@ -1,12 +1,34 @@
 import { NextResponse } from 'next/server';
 
+// 1. 보안 검사(Preflight)를 통과시켜주는 OPTIONS 함수 추가
+export async function OPTIONS() {
+  return NextResponse.json({}, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*', // 모든 외부 홈페이지(카페24 등) 접근 허용
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    },
+  });
+}
+
+// 2. 실제 노션 데이터를 가져오는 GET 함수
 export async function GET() {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  };
+
   try {
     const databaseId = process.env.NOTION_DATABASE_ID;
     const apiKey = process.env.NOTION_API_KEY;
 
     if (!databaseId || !apiKey) {
-      return NextResponse.json({ error: '환경변수가 설정되지 않았습니다.' }, { status: 500 });
+      return NextResponse.json(
+        { error: '환경변수가 설정되지 않았습니다.' }, 
+        { status: 500, headers: corsHeaders }
+      );
     }
 
     const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
@@ -24,7 +46,6 @@ export async function GET() {
           },
         ],
       }),
-      // 항상 최신 데이터를 가져오도록 설정
       cache: 'no-store' 
     });
 
@@ -35,24 +56,16 @@ export async function GET() {
     const data = await res.json();
 
     const results = data.results.map((page) => {
-      // 노션 속성 이름이 '이름', 'Title', 'title' 중 무엇이든 호환되게 처리
-      const title = page.properties.이름?.title[0]?.plain_text || 
-                    page.properties.Title?.title[0]?.plain_text || 
-                    page.properties.title?.title[0]?.plain_text || 'Untitled';
+      const title = page.properties.title?.title[0]?.plain_text || 'Untitled';
       
       let imageUrl = '';
-      const urlProp = page.properties.URL?.url || page.properties.URL?.rich_text?.[0]?.plain_text;
-      if (urlProp) {
-        imageUrl = urlProp;
-      } else if (page.properties.imageUrl?.files?.[0]) {
-        const fileObj = page.properties.imageUrl.files[0];
-        imageUrl = fileObj.file?.url || fileObj.external?.url;
+      if (page.properties.URL?.type === 'files' && page.properties.URL.files[0]) {
+        imageUrl = page.properties.URL.files[0].file?.url || page.properties.URL.files[0].external?.url || '';
       }
-
+      
       let subImages = '';
-      const subProp = page.properties.SubImages?.rich_text?.[0]?.plain_text || page.properties.SubImages?.url;
-      if (subProp) {
-        subImages = subProp;
+      if (page.properties.SubImages?.type === 'files' && page.properties.SubImages.files[0]) {
+        subImages = page.properties.SubImages.files[0].file?.url || page.properties.SubImages.files[0].external?.url || '';
       }
 
       return {
@@ -63,9 +76,13 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json(results);
+    // 성공 시에도 출입증(CORS 헤더)을 동봉하여 카페24로 전송
+    return NextResponse.json(results, { status: 200, headers: corsHeaders });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch data' }, 
+      { status: 500, headers: corsHeaders }
+    );
   }
 }
