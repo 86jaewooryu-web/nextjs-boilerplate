@@ -5,7 +5,8 @@ export async function GET() {
   const DATABASE_ID = process.env.NOTION_DATABASE_ID;
 
   try {
-    const response = await fetch(`https://api.notion.com/v1/databases/${DATABASE_ID}/query`, {
+    const response = `https://api.notion.com/v1/databases/${DATABASE_ID}/query`;
+    const notionRes = await fetch(response, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${NOTION_TOKEN}`,
@@ -14,28 +15,40 @@ export async function GET() {
       },
     });
 
-    const data = await response.json();
+    const data = await notionRes.json();
 
     if (!data.results || !Array.isArray(data.results)) {
-      return NextResponse.json([], {
-        headers: { 'Access-Control-Allow-Origin': '*' }
-      });
+      return NextResponse.json([], { headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
     const portfolios = data.results.map(page => {
       const props = page.properties || {};
-      const firstPropKey = Object.keys(props)[0];
-      const titleProp = firstPropKey ? props[firstPropKey] : null;
       
+      // 어떤 이름의 열이든 첫 번째와 두 번째 속성값을 무조건 타이틀과 이미지로 가져오기
       let title = 'Untitled';
-      if (titleProp && titleProp.title && titleProp.title[0]) {
-        title = titleProp.title[0].plain_text;
+      let imageUrl = '';
+
+      for (const key of Object.keys(props)) {
+        const prop = props[key];
+        if (prop.type === 'title' && prop.title && prop.title[0]) {
+          title = prop.title[0].plain_text;
+        }
+        if (prop.type === 'files' && prop.files && prop.files[0]) {
+          imageUrl = prop.files[0].file?.url || prop.files[0].external?.url || '';
+        }
       }
 
-      return { title, imageUrl: '' };
+      // 만약 타이틀을 못 찾았으면 첫 번째 텍스트 값이라도 가져오기
+      if (title === 'Untitled' && Object.keys(props).length > 0) {
+        const firstProp = props[Object.keys(props)[0]];
+        if (firstProp?.rich_text?.[0]) {
+          title = firstProp.rich_text[0].plain_text;
+        }
+      }
+
+      return { title, imageUrl };
     });
 
-    // CORS 허용 헤더를 포함하여 응답 반환
     return NextResponse.json(portfolios, {
       headers: { 'Access-Control-Allow-Origin': '*' }
     });
