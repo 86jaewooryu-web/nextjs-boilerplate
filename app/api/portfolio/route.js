@@ -5,6 +5,10 @@ export async function GET() {
     const databaseId = process.env.NOTION_DATABASE_ID;
     const apiKey = process.env.NOTION_API_KEY;
 
+    if (!databaseId || !apiKey) {
+      return NextResponse.json({ error: '환경변수가 설정되지 않았습니다.' }, { status: 500 });
+    }
+
     const res = await fetch(`https://api.notion.com/v1/databases/${databaseId}/query`, {
       method: 'POST',
       headers: {
@@ -20,16 +24,21 @@ export async function GET() {
           },
         ],
       }),
+      // 항상 최신 데이터를 가져오도록 설정
+      cache: 'no-store' 
     });
 
     if (!res.ok) {
-      throw new Error('Failed to fetch from Notion API');
+      throw new Error('Notion API 통신 실패');
     }
 
     const data = await res.json();
 
     const results = data.results.map((page) => {
-      const title = page.properties.title?.title[0]?.plain_text || 'Untitled';
+      // 노션 속성 이름이 '이름', 'Title', 'title' 중 무엇이든 호환되게 처리
+      const title = page.properties.이름?.title[0]?.plain_text || 
+                    page.properties.Title?.title[0]?.plain_text || 
+                    page.properties.title?.title[0]?.plain_text || 'Untitled';
       
       let imageUrl = '';
       const urlProp = page.properties.URL?.url || page.properties.URL?.rich_text?.[0]?.plain_text;
