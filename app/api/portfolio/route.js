@@ -46,7 +46,7 @@ export async function GET() {
           },
         ],
       }),
-      next: { revalidate: 3600 } 
+      next: { revalidate: 0 } 
     });
 
     if (!res.ok) {
