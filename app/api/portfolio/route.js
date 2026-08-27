@@ -46,7 +46,7 @@ export async function GET() {
           },
         ],
       }),
-      next: { revalidate: 0 } 
+      next: { revalidate: 0 } // 실시간 반영 옵션
     });
 
     if (!res.ok) {
@@ -58,14 +58,19 @@ export async function GET() {
     const results = data.results.map((page) => {
       const title = page.properties.title?.title[0]?.plain_text || 'Untitled';
       
+      // 메인 이미지 1장 추출
       let imageUrl = '';
       if (page.properties.URL?.type === 'files' && page.properties.URL.files[0]) {
         imageUrl = page.properties.URL.files[0].file?.url || page.properties.URL.files[0].external?.url || '';
       }
       
+      // 🔥 서브 이미지 다중 추출 로직 (업로드된 모든 이미지를 가져와서 쉼표로 연결)
       let subImages = '';
-      if (page.properties.SubImages?.type === 'files' && page.properties.SubImages.files[0]) {
-        subImages = page.properties.SubImages.files[0].file?.url || page.properties.SubImages.files[0].external?.url || '';
+      if (page.properties.SubImages?.type === 'files' && page.properties.SubImages.files.length > 0) {
+        subImages = page.properties.SubImages.files
+          .map(fileObj => fileObj.file?.url || fileObj.external?.url || '')
+          .filter(url => url !== '') // 빈 주소는 걸러냄
+          .join(','); // 여러 주소를 쉼표(,)로 하나로 합침
       }
 
       return {
